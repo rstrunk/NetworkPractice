@@ -7,7 +7,7 @@ namespace NetworkPractice;
 public class Game1 : Game
 {
     private GraphicsDeviceManager _graphics;
-    private SpriteBatch _spriteBatch;
+    private SpriteBatch? _spriteBatch;
 
     public Game1()
     {
