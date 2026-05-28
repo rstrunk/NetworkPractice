@@ -7,7 +7,7 @@ namespace NetworkPractice
         public Tile(TileType tileType)
         {
             TileType = tileType;
-            IsPassable = (tileType != TileType.Wall && tileType != TileType.Empty);
+            IsPassable = (tileType != TileType.Blocked && tileType != TileType.Empty);
         }
     }
 }

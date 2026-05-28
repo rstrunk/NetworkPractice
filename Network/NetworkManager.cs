@@ -1,8 +1,8 @@
 using LiteNetLib;
 using LiteNetLib.Utils;
+using System;
 using System.Net;
 using System.Net.Sockets;
-using System.Collections.Concurrent;
 
 namespace NetworkPractice
 {
@@ -11,12 +11,14 @@ namespace NetworkPractice
         private NetManager _netManager;
         private readonly NetDataWriter _writer = new NetDataWriter();
         private NetPeer? _serverPeer;
+        public event Action<PlayerInput>? PlayerInputReceived;
+        public event Action<WorldState>? WorldStateReceived;
+        public event Action<string, WorldState>? PlayerJoined;
+        private readonly PacketSerializer _serializer = new();
 
         public bool IsServer { get; private set; }
-        public ConcurrentQueue<PlayerInput> IncomingInputs { get; } = new();
-        private ConcurrentQueue<PlayerInput> _outgoingInputs = new();
-        public ConcurrentQueue<WorldState> IncomingStates { get; } = new();
-        private ConcurrentQueue<WorldState> _outgoingStates = new();
+        private int _nextPlayerId = 2; // host is always 1
+        public Action<NetPeer, int>? OnPlayerConnected;
 
         public NetworkManager()
         {
@@ -49,16 +51,22 @@ namespace NetworkPractice
         // --- INetEventListener callbacks ---
 
         public void OnPeerConnected(NetPeer peer)
-        {
-            if (IsServer)
-            {
-                // a client just connected
-            }
-            else
-            {
-                _serverPeer = peer; // client stores its connection to the server
-            }
-        }
+{
+    if (IsServer)
+    {
+        int assignedId = _nextPlayerId++;
+        OnPlayerConnected?.Invoke(peer, assignedId);
+    }
+    else
+        _serverPeer = peer;
+}
+
+public void SendPlayerJoined(LiteNetLib.NetPeer peer, string entityId, WorldState state)
+{
+    _writer.Reset();
+    _serializer.WritePlayerJoined(_writer, entityId, state);
+    peer.Send(_writer, DeliveryMethod.ReliableOrdered);
+}
 
         public void OnPeerDisconnected(NetPeer peer, DisconnectInfo disconnectInfo)
         {
@@ -71,83 +79,30 @@ namespace NetworkPractice
             switch (reader.GetByte())
             {
                 case (byte)PacketTypes.PlayerInput:
-                    HandlePlayerEvents(reader);
+                    PlayerInputReceived?.Invoke(_serializer.ReadPlayerInput(reader));
                     break;
                 case (byte)PacketTypes.WorldState:
-                    HandleWorldStateEvents(reader);
+                    WorldStateReceived?.Invoke(_serializer.ReadWorldState(reader));
                     break;
+                    case (byte)PacketTypes.PlayerJoined:
+    var (entityId, state) = _serializer.ReadPlayerJoined(reader);
+    PlayerJoined?.Invoke(entityId, state);
+    break;
             }
             reader.Recycle();
-        }
-
-        private void HandlePlayerEvents(NetPacketReader reader)
-        {
-            int playerId = reader.GetInt();
-            bool moveLeft = reader.GetBool();
-            bool moveRight = reader.GetBool();
-            bool jump = reader.GetBool();
-            IncomingInputs.Enqueue(new PlayerInput
-            {
-                PlayerId = playerId,
-                MoveLeft = moveLeft,
-                MoveRight = moveRight,
-                Jump = jump
-            });
         }
 
         public void SendPlayerInput(PlayerInput input)
         {
             _writer.Reset();
-            _writer.Put((byte)PacketTypes.PlayerInput);
-            _writer.Put(input.PlayerId);
-            _writer.Put(input.MoveLeft);
-            _writer.Put(input.MoveRight);
-            _writer.Put(input.Jump);
+            _serializer.WritePlayerInput(_writer, input);
             _serverPeer?.Send(_writer, DeliveryMethod.Unreliable);
-        }
-
-        private void HandleWorldStateEvents(NetPacketReader reader)
-        {
-            int tick = reader.GetInt();
-            int playerCount = reader.GetInt();
-            PlayerState[] playerStates = new PlayerState[playerCount];
-            for(int i = 0; i < playerCount; i++)
-            {
-                playerStates[i].PlayerId = reader.GetInt();
-                playerStates[i].Position.X = reader.GetFloat();
-                playerStates[i].Position.Y = reader.GetFloat();
-                playerStates[i].Velocity.X = reader.GetFloat();
-                playerStates[i].Velocity.Y = reader.GetFloat();
-                playerStates[i].FacingDirection = reader.GetInt();
-                playerStates[i].Grounded = reader.GetBool();
-                playerStates[i].GroundVelocity.X = reader.GetFloat();
-                playerStates[i].GroundVelocity.Y = reader.GetFloat();
-            }
-            IncomingStates.Enqueue(new WorldState
-            {
-                Tick = tick,
-                PlayerStates = playerStates
-            });
         }
 
         public void SendWorldState(WorldState state)
         {
             _writer.Reset();
-            _writer.Put((byte)PacketTypes.WorldState);
-            _writer.Put(state.Tick);
-            _writer.Put(state.PlayerStates.Length);
-            for (int i = 0; i < state.PlayerStates.Length; i++)
-            {
-                _writer.Put(state.PlayerStates[i].PlayerId);
-                _writer.Put(state.PlayerStates[i].Position.X);
-                _writer.Put(state.PlayerStates[i].Position.Y);
-                _writer.Put(state.PlayerStates[i].Velocity.X);
-                _writer.Put(state.PlayerStates[i].Velocity.Y);
-                _writer.Put(state.PlayerStates[i].FacingDirection);
-                _writer.Put(state.PlayerStates[i].Grounded);
-                _writer.Put(state.PlayerStates[i].GroundVelocity.X);
-                _writer.Put(state.PlayerStates[i].GroundVelocity.Y);
-            }
+            _serializer.WriteWorldState(_writer, state);
             _netManager.SendToAll(_writer, DeliveryMethod.Unreliable);
         }
 

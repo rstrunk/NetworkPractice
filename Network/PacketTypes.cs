@@ -4,6 +4,7 @@ namespace NetworkPractice
 {
     PlayerInput = 1,
     WorldState= 2,
-    ChatMessage = 3
+    ChatMessage = 3,
+    PlayerJoined = 4
 }
 }

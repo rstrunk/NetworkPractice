@@ -8,10 +8,7 @@ namespace NetworkPractice
 
         public TileRules()
         {
-            _profiles[TileType.Floor] = new TileProfile(footstepSoundKey: "footstep_floor", bumpSoundKey: null);
-            _profiles[TileType.Metal] = new TileProfile(footstepSoundKey: "footstep_metal", bumpSoundKey: null);
-            _profiles[TileType.Rubble] = new TileProfile(footstepSoundKey: "footstep_rubble", bumpSoundKey: null, speedMultiplier:  0.8f);
-                        _profiles[TileType.Carpet] = new TileProfile(footstepSoundKey: "footstep_carpet", bumpSoundKey: null);
+            _profiles[TileType.Floor] = new TileProfile(footstepSoundKey: "footstep_floor", bumpSoundKey: null);                        
             _profiles[TileType.Wall]  = new TileProfile(footstepSoundKey: null, bumpSoundKey: "bump_wall");
             _profiles[TileType.Empty] = new TileProfile(footstepSoundKey: null, bumpSoundKey: "bump_wall");
         }

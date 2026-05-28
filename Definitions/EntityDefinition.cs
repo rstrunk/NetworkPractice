@@ -1,10 +1,10 @@
 namespace NetworkPractice
 {
-    public class BodyDefinition
+    public class EntityDefinition
     {
-        public string Type;
         public int HeightInTiles;
         public int WidthInTiles;
-        public bool IsPushable;
+        public int BaseMaxHealth;
+                public bool IsPassable;
     }
     }

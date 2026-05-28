@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace NetworkPractice
@@ -13,29 +14,53 @@ namespace NetworkPractice
             _localSimulation = localSimulation;
             _networkManager = networkManager;
             _inputBuffer = inputBuffer;
+            _networkManager.PlayerInputReceived += input => _inputBuffer.AddInput(_localSimulation.GameState.Tick, input);
+            _networkManager.OnPlayerConnected = (peer, assignedId) => SpawnPlayer(peer, assignedId);
         }
 
-        public WorldState Update(PlayerInput[] localInputs, float deltaTime)
+        private void SpawnPlayer(LiteNetLib.NetPeer peer, int assignedId)
+        {
+            string entityId = $"player_{assignedId}";
+
+            EntityState newPlayer = new EntityState
+            {
+                Id = entityId,
+                Type = "player",
+                Position = new System.Numerics.Vector2(64, 0), // placeholder spawn
+                Velocity = System.Numerics.Vector2.Zero,
+                FacingDirection = 1,
+                Grounded = false,
+                GroundVelocity = System.Numerics.Vector2.Zero,
+                CurrentHealth = 100,
+                CurrentMaxHealth = 100,
+                IsStatic = false
+            };
+
+            // Add new player to world state
+            EntityState[] current = _localSimulation.GameState.Entities;
+            EntityState[] updated = new EntityState[current.Length + 1];
+            Array.Copy(current, updated, current.Length);
+            updated[current.Length] = newPlayer;
+            _localSimulation.GameState.Entities = updated;
+
+            // Send PlayerJoined packet to the connecting client
+            _networkManager.SendPlayerJoined(peer, entityId, _localSimulation.GameState);
+        }
+
+        public WorldState? Update(PlayerInput[] localInputs, float deltaTime)
         {
             _networkManager.PollEvents();
             int tick = _localSimulation.GameState.Tick;
 
-            while (_networkManager.IncomingInputs.TryDequeue(out PlayerInput input))
-            {
-                _inputBuffer.AddInput(tick, input);
-            }
-
-            // combine local and remote inputs
             foreach (PlayerInput input in localInputs)
             {
                 _inputBuffer.AddInput(tick, input);
             }
 
-            WorldState newState = _localSimulation.Update(_inputBuffer.GetReadyInputs(tick), deltaTime);
-
-            _networkManager.SendWorldState(newState); //sends to everyone but the server's machine.
-
-            return newState; //sends to the server's machine, which is also the host player.
+            WorldState? newState = _localSimulation.Update(_inputBuffer.GetReadyInputs(tick), deltaTime);
+            if (newState != null)
+                _networkManager.SendWorldState(newState);
+            return newState;
         }
     }
 }

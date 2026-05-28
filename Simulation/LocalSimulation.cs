@@ -7,28 +7,32 @@ namespace NetworkPractice
     {
         public WorldState GameState;
         private WorldGrid _grid;
-        private Dictionary<string, BodyDefinition> _bodyDefinitions;
+        private Dictionary<string, EntityDefinition> _definitions;
 
-        private const float MoveSpeed = 150f;
-        private const float JumpForce = -400f;
         private const float Gravity = 400f;
 
-        public LocalSimulation(WorldState gameState, WorldGrid grid, Dictionary<string, BodyDefinition> bodyDefinitions)
+        public LocalSimulation(WorldState gameState, WorldGrid grid, Dictionary<string, EntityDefinition> definitions)
         {
             GameState = gameState;
             _grid = grid;
-            _bodyDefinitions = bodyDefinitions;
+            _definitions = definitions;
         }
 
-        public WorldState Update(PlayerInput[] playerInputs, float deltaTime)
+        public WorldState? Update(PlayerInput[] playerInputs, float deltaTime)
         {
-            for (int i = 0; i < playerInputs.Length; i++)
+            Dictionary<string, PlayerInput> inputMap = new();
+            foreach (PlayerInput input in playerInputs)
             {
-                for (int j = 0; j < GameState.PlayerStates.Length; j++)
-                {
-                    ApplyInput(ref GameState.PlayerStates[j], playerInputs[i]);
-                }
+                if (input.EntityId != null)
+                    inputMap[input.EntityId] = input;
             }
+
+            foreach (EntityState entity in GameState.Entities)
+            {
+                if (inputMap.TryGetValue(entity.Id ?? "", out PlayerInput input))
+                    ApplyInput(entity, input);
+            }
+
             ApplyGravity(deltaTime);
             ResolveCollisions(deltaTime);
             IntegratePositions(deltaTime);
@@ -36,161 +40,178 @@ namespace NetworkPractice
             return GameState;
         }
 
-        private void ApplyInput(ref PlayerState playerState, PlayerInput input)
+        private void ApplyInput(EntityState entity, PlayerInput input)
         {
-            if (input.PlayerId == playerState.PlayerId)
+            if (_definitions.TryGetValue(entity.Type ?? "", out EntityDefinition? definition) &&
+                definition is ControllableDefinition controllable)
             {
                 if (input.MoveRight)
-                    playerState.Velocity.X = MoveSpeed;
+                    entity.Velocity.X = controllable.MoveSpeed;
                 else if (input.MoveLeft)
-                    playerState.Velocity.X = -MoveSpeed;
+                    entity.Velocity.X = -controllable.MoveSpeed;
                 else
-                    playerState.Velocity.X = 0f;
-                if (input.Jump && playerState.Grounded)
+                    entity.Velocity.X = 0f;
+
+                if (input.Jump && entity.Grounded)
                 {
-                    playerState.Velocity.Y = JumpForce;
-                    playerState.Grounded = false;
+                    entity.Velocity.Y = controllable.JumpForce;
+                    entity.Grounded = false;
                 }
             }
         }
 
         private void ApplyGravity(float deltaTime)
         {
-            for (int i = 0; i < GameState.PlayerStates.Length; i++)
+            foreach (EntityState entity in GameState.Entities)
             {
-                GameState.PlayerStates[i].Velocity.Y += (Gravity * deltaTime);
-            }
-            for (int i = 0; i < GameState.PhysicsBodies.Length; i++)
-            {
-                if (!GameState.PhysicsBodies[i].IsStatic)
-                    GameState.PhysicsBodies[i].Velocity.Y += (Gravity * deltaTime);
+                if (!entity.IsStatic)
+                    entity.Velocity.Y += Gravity * deltaTime;
             }
         }
 
         private void ResolveCollisions(float deltaTime)
         {
-            for (int i = 0; i < GameState.PlayerStates.Length; i++)
+            // Reset ground velocity for all entities
+            foreach (EntityState entity in GameState.Entities)
+                entity.GroundVelocity = Vector2.Zero;
+
+            // Resolve non-static entities against tiles
+            foreach (EntityState entity in GameState.Entities)
             {
-                GameState.PlayerStates[i].GroundVelocity = Vector2.Zero;
+                if (!entity.IsStatic)
+                    ResolveEntityTileCollisions(entity, deltaTime);
             }
-            for (int i = 0; i < GameState.PhysicsBodies.Length; i++)
+
+            // Resolve non-static entities against each other
+            for (int i = 0; i < GameState.Entities.Length; i++)
             {
-                ResolvePhysicsBodyTileCollisions(ref GameState.PhysicsBodies[i], deltaTime);
-            }
-            for (int i = 0; i < GameState.PlayerStates.Length; i++)
-            {
-                for (int j = 0; j < GameState.PhysicsBodies.Length; j++)
+                for (int j = i + 1; j < GameState.Entities.Length; j++)
                 {
-                    ResolvePlayerPhysicsBodyCollisions(ref GameState.PlayerStates[i], ref GameState.PhysicsBodies[j]);
+                    if (!GameState.Entities[i].IsStatic || !GameState.Entities[j].IsStatic)
+                        ResolveEntityCollision(GameState.Entities[i], GameState.Entities[j]);
                 }
-                ResolvePlayerTileCollisions(ref GameState.PlayerStates[i], deltaTime);
-            }
-                    }
-
-        private void ResolvePlayerTileCollisions(ref PlayerState playerState, float deltaTime)
-        {
-            Vector2 intended = playerState.Position + (playerState.Velocity * deltaTime);
-
-            //Check each axis separately
-            Vector2 horizontalIntended = new Vector2(intended.X, playerState.Position.Y);
-            if (!_grid.IsPassable(horizontalIntended) || !_grid.InBounds(horizontalIntended)) //horizontal check
-                playerState.Velocity.X = 0f; //Don't move horizontally if there's a collision
-
-            Vector2 verticalIntended = new Vector2(playerState.Position.X, intended.Y);
-            if (!_grid.IsPassable(verticalIntended) || !_grid.InBounds(verticalIntended)) //Vertical Check        
-            {
-                if (playerState.Velocity.Y > 0) //Collided while falling, so we're grounded
-                {
-                    playerState.Grounded = true;
-                }
-                playerState.Velocity.Y = 0f;
-            }
-            else
-                playerState.Grounded = false;
-        }
-
-        public void ResolvePlayerPhysicsBodyCollisions(ref PlayerState playerState, ref PhysicsBodyState bodyState)
-        {
-            bool overlaps = OverlapsBody(playerState.Position, bodyState);
-
-            //vertical collision checks
-            if (overlaps && playerState.Velocity.Y > 0)
-            {
-                playerState.Position.Y = bodyState.Position.Y - 1;
-                playerState.Grounded = true;
-                playerState.GroundVelocity.X = bodyState.Velocity.X; //Move with the platform if it's moving horizontally
-                playerState.Velocity.Y = 0f;
-            }
-            if (overlaps && playerState.Velocity.Y < 0)
-                playerState.Velocity.Y = 0f;
-
-            //Horizontal collision checks
-            if (overlaps && playerState.Velocity.X > 0)
-            {
-                playerState.Position.X = bodyState.Position.X - 1;
-                if (!bodyState.IsStatic && _bodyDefinitions[bodyState.Type].IsPushable)
-                    bodyState.Velocity.X = playerState.Velocity.X;
-            }
-            if (overlaps && playerState.Velocity.X < 0)
-            {
-                playerState.Position.X = bodyState.Position.X + 1;
-                if (!bodyState.IsStatic && _bodyDefinitions[bodyState.Type].IsPushable)
-                    bodyState.Velocity.X = playerState.Velocity.X;
             }
         }
 
-        private void ResolvePhysicsBodyTileCollisions(ref PhysicsBodyState bodyState, float deltaTime)
+        private void ResolveEntityTileCollisions(EntityState entity, float deltaTime)
         {
-            if (bodyState.IsStatic)
+            if (!_definitions.TryGetValue(entity.Type ?? "", out EntityDefinition? definition))
                 return;
 
-            //Initialize the variables we need
-            Vector2 horizontalIntended = bodyState.Position;
-            Vector2 verticalIntended = bodyState.Position;
+            Vector2 intendedPosition = entity.Position + (entity.Velocity * deltaTime);
 
-            //Bodies can have multi-tile dimensions, so we need to check the edges rather than a single point
-            //Check each axis separately            
-            if (bodyState.Velocity.X != 0)
+            // Horizontal check
+            Vector2 horizontalIntended = new Vector2(intendedPosition.X, entity.Position.Y);
+            var (hTopLeft, hTopRight, hBottomLeft, hBottomRight) = GetBounds(horizontalIntended, definition);
+
+            if (entity.Velocity.X > 0)
             {
-                if (bodyState.Velocity.X > 0) //Moving right, so set to the right edge + velocity
-                    horizontalIntended.X = (bodyState.Position.X + (_bodyDefinitions[bodyState.Type].WidthInTiles * _grid.TileSize)) + (bodyState.Velocity.X * deltaTime);
-                if (bodyState.Velocity.X < 0) //Moving left, so set to the left edge + velocity
-                    horizontalIntended.X = bodyState.Position.X + (bodyState.Velocity.X * deltaTime);
-                if (!_grid.IsPassable(horizontalIntended) || !_grid.InBounds(horizontalIntended))
-                    bodyState.Velocity.X = 0f;
+                if (!_grid.IsPassable(hTopRight) || !_grid.IsPassable(hBottomRight))
+                    entity.Velocity.X = 0f;
             }
-            if (bodyState.Velocity.Y != 0)
+            else if (entity.Velocity.X < 0)
             {
-                if (bodyState.Velocity.Y > 0) //Moving down, so set to the bottom edge + velocity
-                    verticalIntended.Y = (bodyState.Position.Y + (_bodyDefinitions[bodyState.Type].HeightInTiles * _grid.TileSize)) + (bodyState.Velocity.Y * deltaTime);
-                if (bodyState.Velocity.Y < 0) //Moving up, so set to the top edge + velocity
-                    verticalIntended.Y = bodyState.Position.Y + (bodyState.Velocity.Y * deltaTime);
-                if (!_grid.IsPassable(verticalIntended) || !_grid.InBounds(verticalIntended))
-                    bodyState.Velocity.Y = 0f;
+                if (!_grid.IsPassable(hTopLeft) || !_grid.IsPassable(hBottomLeft))
+                    entity.Velocity.X = 0f;
+            }
+
+            // Vertical check
+            Vector2 verticalIntended = new Vector2(entity.Position.X, intendedPosition.Y);
+            var (vTopLeft, vTopRight, vBottomLeft, vBottomRight) = GetBounds(verticalIntended, definition);
+
+            if (entity.Velocity.Y > 0)
+            {
+                if (!_grid.IsPassable(vBottomLeft) || !_grid.IsPassable(vBottomRight))
+                {
+                    entity.Grounded = true;
+                    entity.Velocity.Y = 0f;
+                }
+            }
+            else if (entity.Velocity.Y < 0)
+            {
+                if (!_grid.IsPassable(vTopLeft) || !_grid.IsPassable(vTopRight))
+                    entity.Velocity.Y = 0f;
+            }
+            else
+                entity.Grounded = false;
+        }
+
+        private void ResolveEntityCollision(EntityState a, EntityState b)
+        {
+            if (!_definitions.TryGetValue(a.Type ?? "", out EntityDefinition? definitionA))
+                return;
+            if (!_definitions.TryGetValue(b.Type ?? "", out EntityDefinition? definitionB))
+                return;
+
+            // Skip if either entity is passable
+            if (definitionA.IsPassable || definitionB.IsPassable)
+                return;
+
+            if (!OverlapsEntity(a, b, definitionA, definitionB))
+                return;
+
+            var (aTopLeft, aTopRight, aBottomLeft, aBottomRight) = GetBounds(a.Position, definitionA);
+            var (bTopLeft, bTopRight, bBottomLeft, bBottomRight) = GetBounds(b.Position, definitionB);
+
+            // Vertical resolution
+            if (a.Velocity.Y > 0 && definitionB is PhysicsBodyDefinition)
+            {
+                a.Position.Y = bTopLeft.Y - (definitionA.HeightInTiles * _grid.TileSize);
+                a.Grounded = true;
+                a.GroundVelocity.X = b.Velocity.X;
+                a.Velocity.Y = 0f;
+            }
+            else if (a.Velocity.Y < 0)
+            {
+                a.Position.Y = bBottomLeft.Y;
+                a.Velocity.Y = 0f;
+            }
+
+            // Horizontal resolution
+            if (a.Velocity.X > 0)
+            {
+                a.Position.X = bTopLeft.X - (definitionA.WidthInTiles * _grid.TileSize);
+                if (!b.IsStatic && definitionB is PhysicsBodyDefinition physicsB && physicsB.IsPushable)
+                    b.Velocity.X = a.Velocity.X;
+            }
+            else if (a.Velocity.X < 0)
+            {
+                a.Position.X = bTopRight.X;
+                if (!b.IsStatic && definitionB is PhysicsBodyDefinition physicsB && physicsB.IsPushable)
+                    b.Velocity.X = a.Velocity.X;
             }
         }
 
-        private bool OverlapsBody(Vector2 position, PhysicsBodyState bodyState)
+        private bool OverlapsEntity(EntityState a, EntityState b, EntityDefinition definitionA, EntityDefinition definitionB)
         {
-            int bodyRightEdge = (int)(bodyState.Position.X + (_bodyDefinitions[bodyState.Type].WidthInTiles * _grid.TileSize));
-            int bodyBottomEdge = (int)(bodyState.Position.Y + (_bodyDefinitions[bodyState.Type].HeightInTiles * _grid.TileSize));
+            var (aTopLeft, aTopRight, aBottomLeft, aBottomRight) = GetBounds(a.Position, definitionA);
+            var (bTopLeft, bTopRight, bBottomLeft, bBottomRight) = GetBounds(b.Position, definitionB);
 
-            return position.X >= bodyState.Position.X &&
-           position.X <= bodyRightEdge &&
-           position.Y >= bodyState.Position.Y &&
-           position.Y <= bodyBottomEdge;
+            return aTopLeft.X < bTopRight.X &&
+                   aTopRight.X > bTopLeft.X &&
+                   aTopLeft.Y < bBottomLeft.Y &&
+                   aBottomLeft.Y > bTopLeft.Y;
         }
-    
-    private void IntegratePositions(float deltaTime)
+
+        private (Vector2 topLeft, Vector2 topRight, Vector2 bottomLeft, Vector2 bottomRight) GetBounds(Vector2 position, EntityDefinition definition)
         {
-            for (int i = 0; i < GameState.PlayerStates.Length; i++)
+            float width = definition.WidthInTiles * _grid.TileSize;
+            float height = definition.HeightInTiles * _grid.TileSize;
+
+            return (
+                position,
+                new Vector2(position.X + width, position.Y),
+                new Vector2(position.X, position.Y + height),
+                new Vector2(position.X + width, position.Y + height)
+            );
+        }
+
+        private void IntegratePositions(float deltaTime)
+        {
+            foreach (EntityState entity in GameState.Entities)
             {
-                GameState.PlayerStates[i].Position += (GameState.PlayerStates[i].Velocity + GameState.PlayerStates[i].GroundVelocity) * deltaTime;
-            }
-            for (int i = 0; i < GameState.PhysicsBodies.Length; i++)
-            {
-                if (!GameState.PhysicsBodies[i].IsStatic)
-                    GameState.PhysicsBodies[i].Position += GameState.PhysicsBodies[i].Velocity * deltaTime;
+                if (!entity.IsStatic)
+                    entity.Position += (entity.Velocity + entity.GroundVelocity) * deltaTime;
             }
         }
     }
