@@ -4,23 +4,23 @@ namespace NetworkPractice
 {
     public class InputBuffer
     {
-        private readonly List<(int Tick, PlayerInput Input)> _buffer;
+        private readonly List<(int Tick, ControllerInput Input)> _buffer;
         private readonly int _delayTicks;
 
         public InputBuffer(int delayTicks = 3)
         {
-            _buffer = new List<(int Tick, PlayerInput Input)>();
+            _buffer = new List<(int Tick, ControllerInput Input)>();
             _delayTicks = delayTicks;
         }
 
-        public void AddInput(int currentTick, PlayerInput input)
+        public void AddInput(int currentTick, ControllerInput input)
         {
             _buffer.Add((currentTick, input));
         }
 
-        public PlayerInput[] GetReadyInputs(int currentTick)
+        public ControllerInput[] GetReadyInputs(int currentTick)
         {
-            List<PlayerInput> ready = new List<PlayerInput>();
+            List<ControllerInput> ready = new List<ControllerInput>();
 
             for (int i = _buffer.Count - 1; i >= 0; i--)
             {

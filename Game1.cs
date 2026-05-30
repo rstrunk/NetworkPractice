@@ -13,6 +13,8 @@ public class Game1 : Game
     private SpriteBatch? _spriteBatch;
     private NetworkManager? _networkManager;
     private ISimulation? _simulation;
+private Controller _controller = new Controller("player_1");
+private KeyboardState _previousKeyboardState;
 
     public Game1()
     {
@@ -23,10 +25,7 @@ public class Game1 : Game
 
     protected override void Initialize()
     {
-        WorldGrid grid = new WorldGrid(10, 1, 64);
-        grid.SetTile(0, 0, TileType.Floor);
-        grid.SetTile(1, 0, TileType.Floor);
-        grid.SetTile(2, 0, TileType.Floor);
+        WorldGrid grid = new WorldGrid(6, 100);
 
         Dictionary<string, EntityDefinition> definitions = new()
         {
@@ -49,7 +48,7 @@ public class Game1 : Game
                 {
                     Id = "player_1",
                     Type = "player",
-                    Position = new System.Numerics.Vector2(90, 0),
+                    Position = new System.Numerics.Vector2(200, 2000),
                     Velocity = System.Numerics.Vector2.Zero,
                     FacingDirection = 1,
                     Grounded = false,
@@ -108,15 +107,11 @@ public class Game1 : Game
         if (_simulation != null)
         {
             float deltaTime = (float)gameTime.ElapsedGameTime.TotalSeconds;
-            PlayerInput localInput = new PlayerInput
-            {
-                MoveLeft = Keyboard.GetState().IsKeyDown(Keys.Left),
-                MoveRight = Keyboard.GetState().IsKeyDown(Keys.Right),
-                Jump = Keyboard.GetState().IsKeyDown(Keys.Space)
-            };
-            WorldState? state = _simulation.Update(new PlayerInput[] { localInput }, deltaTime);
+            ControllerInput localInput = _controller.Update(Keyboard.GetState(), _previousKeyboardState);
+            WorldState? state = _simulation.Update(new ControllerInput[] { localInput }, deltaTime);
             if (state?.Entities != null && state.Entities.Length > 0)
-                Console.WriteLine($"Tick: {state.Tick} Position: {state.Entities[0].Position}");
+                Console.WriteLine($"Tick: {state.Tick} Position: {state.Entities[0].Position}, {state.Entities[0].Velocity}");
+            _previousKeyboardState = Keyboard.GetState();
             base.Update(gameTime);
         }
     }

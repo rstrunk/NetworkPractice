@@ -10,9 +10,9 @@ namespace NetworkPractice
             _controlledEntityId = controlledEntityId;
         }
 
-        public PlayerInput Update(KeyboardState currentState, KeyboardState previousState)
+        public ControllerInput Update(KeyboardState currentState, KeyboardState previousState)
         {
-            PlayerInput input = new PlayerInput();
+            ControllerInput input = new ControllerInput();
             input.EntityId = _controlledEntityId;
             if (currentState.IsKeyDown(Keys.A) || currentState.IsKeyDown(Keys.Left))
                 input.MoveLeft = true;

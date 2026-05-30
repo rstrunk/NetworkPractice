@@ -18,10 +18,10 @@ namespace NetworkPractice
             _definitions = definitions;
         }
 
-        public WorldState? Update(PlayerInput[] playerInputs, float deltaTime)
+        public WorldState? Update(ControllerInput[] ControllerInputs, float deltaTime)
         {
-            Dictionary<string, PlayerInput> inputMap = new();
-            foreach (PlayerInput input in playerInputs)
+            Dictionary<string, ControllerInput> inputMap = new();
+            foreach (ControllerInput input in ControllerInputs)
             {
                 if (input.EntityId != null)
                     inputMap[input.EntityId] = input;
@@ -29,7 +29,7 @@ namespace NetworkPractice
 
             foreach (EntityState entity in GameState.Entities)
             {
-                if (inputMap.TryGetValue(entity.Id ?? "", out PlayerInput input))
+                if (inputMap.TryGetValue(entity.Id ?? "", out ControllerInput input))
                     ApplyInput(entity, input);
             }
 
@@ -40,7 +40,7 @@ namespace NetworkPractice
             return GameState;
         }
 
-        private void ApplyInput(EntityState entity, PlayerInput input)
+        private void ApplyInput(EntityState entity, ControllerInput input)
         {
             if (_definitions.TryGetValue(entity.Type ?? "", out EntityDefinition? definition) &&
                 definition is ControllableDefinition controllable)
@@ -99,7 +99,6 @@ namespace NetworkPractice
                 return;
 
             Vector2 intendedPosition = entity.Position + (entity.Velocity * deltaTime);
-
             // Horizontal check
             Vector2 horizontalIntended = new Vector2(intendedPosition.X, entity.Position.Y);
             var (hTopLeft, hTopRight, hBottomLeft, hBottomRight) = GetBounds(horizontalIntended, definition);

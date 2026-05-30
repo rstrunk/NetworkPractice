@@ -1,15 +1,16 @@
 namespace NetworkPractice
 {
-    public enum TileType
+    public enum TileType : byte
     {
+        Empty,
         Floor,
         Ladder,
-        Wall,
-        Platform,
+        WallTop,
+        WallPlatform,
         Blocked,
         Ice,
-        Fire,
-        Dirt,
-        Empty
+        Lava,
+        PitWall,
+        PitBottom
     }
 }

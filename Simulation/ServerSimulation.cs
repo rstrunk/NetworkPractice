@@ -14,7 +14,7 @@ namespace NetworkPractice
             _localSimulation = localSimulation;
             _networkManager = networkManager;
             _inputBuffer = inputBuffer;
-            _networkManager.PlayerInputReceived += input => _inputBuffer.AddInput(_localSimulation.GameState.Tick, input);
+            _networkManager.ControllerInputReceived += input => _inputBuffer.AddInput(_localSimulation.GameState.Tick, input);
             _networkManager.OnPlayerConnected = (peer, assignedId) => SpawnPlayer(peer, assignedId);
         }
 
@@ -47,12 +47,12 @@ namespace NetworkPractice
             _networkManager.SendPlayerJoined(peer, entityId, _localSimulation.GameState);
         }
 
-        public WorldState? Update(PlayerInput[] localInputs, float deltaTime)
+        public WorldState? Update(ControllerInput[] localInputs, float deltaTime)
         {
             _networkManager.PollEvents();
             int tick = _localSimulation.GameState.Tick;
 
-            foreach (PlayerInput input in localInputs)
+            foreach (ControllerInput input in localInputs)
             {
                 _inputBuffer.AddInput(tick, input);
             }

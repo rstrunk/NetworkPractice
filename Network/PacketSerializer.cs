@@ -39,9 +39,9 @@ namespace NetworkPractice
             writer.Put(entity.IsStatic);
         }
 
-        public PlayerInput ReadPlayerInput(NetPacketReader reader)
+        public ControllerInput ReadControllerInput(NetPacketReader reader)
         {
-            return new PlayerInput
+            return new ControllerInput
             {
                 EntityId = reader.GetString(),
                 MoveLeft = reader.GetBool(),
@@ -50,7 +50,7 @@ namespace NetworkPractice
             };
         }
 
-        private void WritePlayerInputPayload(NetDataWriter writer, PlayerInput input)
+        private void WriteControllerInputPayload(NetDataWriter writer, ControllerInput input)
 {
     writer.Put(input.EntityId ?? "");
     writer.Put(input.MoveLeft);
@@ -58,10 +58,10 @@ namespace NetworkPractice
     writer.Put(input.Jump);
 }
 
-public void WritePlayerInput(NetDataWriter writer, PlayerInput input)
+public void WriteControllerInput(NetDataWriter writer, ControllerInput input)
 {
-    writer.Put((byte)PacketTypes.PlayerInput);
-    WritePlayerInputPayload(writer, input);
+    writer.Put((byte)PacketTypes.ControllerInput);
+    WriteControllerInputPayload(writer, input);
 }
 
         public WorldState ReadWorldState(NetPacketReader reader)

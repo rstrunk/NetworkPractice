@@ -11,7 +11,7 @@ namespace NetworkPractice
         private readonly WorldGrid _grid;
 private readonly Dictionary<string, EntityDefinition> _definitions;
         private string? _localEntityId;
-        private readonly List<(int Tick, PlayerInput Input)> _inputHistory = new();
+        private readonly List<(int Tick, ControllerInput Input)> _inputHistory = new();
         private const float ReconciliationThreshold = 0.01f;
         private const int MaxHistorySize = 60;
         
@@ -24,7 +24,7 @@ private readonly Dictionary<string, EntityDefinition> _definitions;
     _networkManager.PlayerJoined += OnPlayerJoined;
 }
 
-        public WorldState? Update(PlayerInput[] localInputs, float deltaTime)
+        public WorldState? Update(ControllerInput[] localInputs, float deltaTime)
         {
             _networkManager.PollEvents();
 
@@ -33,7 +33,7 @@ private readonly Dictionary<string, EntityDefinition> _definitions;
 
             if (localInputs.Length > 0)
             {
-                PlayerInput input = new PlayerInput
+                ControllerInput input = new ControllerInput
                 {
                     EntityId = _localEntityId,
                     MoveLeft = localInputs[0].MoveLeft,
@@ -46,7 +46,7 @@ private readonly Dictionary<string, EntityDefinition> _definitions;
                 if (_inputHistory.Count > MaxHistorySize)
                     _inputHistory.RemoveAt(0);
 
-                _networkManager.SendPlayerInput(input);
+                _networkManager.SendControllerInput(input);
             }
 
             return _localSimulation.Update(localInputs, deltaTime);
@@ -103,13 +103,13 @@ private readonly Dictionary<string, EntityDefinition> _definitions;
             // Rewind to server state and replay inputs
             _localSimulation.GameState = serverState.Clone();
 
-            List<(int Tick, PlayerInput Input)> inputsToReplay = _inputHistory.FindAll(
+            List<(int Tick, ControllerInput Input)> inputsToReplay = _inputHistory.FindAll(
                 entry => entry.Tick > serverState.Tick
             );
 
             foreach (var (tick, input) in inputsToReplay)
             {
-                _localSimulation.Update(new PlayerInput[] { input }, 1f / 60f);
+                _localSimulation.Update(new ControllerInput[] { input }, 1f / 60f);
             }
         }
     }

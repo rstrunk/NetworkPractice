@@ -11,7 +11,7 @@ namespace NetworkPractice
         private NetManager _netManager;
         private readonly NetDataWriter _writer = new NetDataWriter();
         private NetPeer? _serverPeer;
-        public event Action<PlayerInput>? PlayerInputReceived;
+        public event Action<ControllerInput>? ControllerInputReceived;
         public event Action<WorldState>? WorldStateReceived;
         public event Action<string, WorldState>? PlayerJoined;
         private readonly PacketSerializer _serializer = new();
@@ -78,8 +78,8 @@ public void SendPlayerJoined(LiteNetLib.NetPeer peer, string entityId, WorldStat
         {
             switch (reader.GetByte())
             {
-                case (byte)PacketTypes.PlayerInput:
-                    PlayerInputReceived?.Invoke(_serializer.ReadPlayerInput(reader));
+                case (byte)PacketTypes.ControllerInput:
+                    ControllerInputReceived?.Invoke(_serializer.ReadControllerInput(reader));
                     break;
                 case (byte)PacketTypes.WorldState:
                     WorldStateReceived?.Invoke(_serializer.ReadWorldState(reader));
@@ -92,10 +92,10 @@ public void SendPlayerJoined(LiteNetLib.NetPeer peer, string entityId, WorldStat
             reader.Recycle();
         }
 
-        public void SendPlayerInput(PlayerInput input)
+        public void SendControllerInput(ControllerInput input)
         {
             _writer.Reset();
-            _serializer.WritePlayerInput(_writer, input);
+            _serializer.WriteControllerInput(_writer, input);
             _serverPeer?.Send(_writer, DeliveryMethod.Unreliable);
         }
 
